@@ -1,4 +1,4 @@
-"""  
+"""
 Copyright (c) 2019-present NAVER Corp.
 MIT License
 """
@@ -8,15 +8,27 @@ import numpy as np
 import cv2
 import math
 
-""" auxilary functions """
-# unwarp corodinates
-def warpCoord(Minv, pt):
-    out = np.matmul(Minv, (pt[0], pt[1], 1))
-    return np.array([out[0]/out[2], out[1]/out[2]])
-""" end of auxilary functions """
+from collections import OrderedDict
 
+def copyStateDict(state_dict):
+    if list(state_dict.keys())[0].startswith("module"):
+        start_idx = 1
+    else:
+        start_idx = 0
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = ".".join(k.split(".")[start_idx:])
+        new_state_dict[name] = v
+    return new_state_dict
 
-def getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text):
+# config
+num_cp = 5
+max_len_ratio = 0.7
+expand_ratio = 1.45
+max_r = 2.0
+step_r = 0.2
+
+def getDetectionBoxesAndPolygons(textmap, linkmap, text_threshold, link_threshold, low_text):
     # prepare data
     linkmap = linkmap.copy()
     textmap = textmap.copy()
@@ -29,7 +41,8 @@ def getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text)
     text_score_comb = np.clip(text_score + link_score, 0, 1)
     nLabels, labels, stats, centroids = cv2.connectedComponentsWithStats(text_score_comb.astype(np.uint8), connectivity=4)
 
-    det = []
+    polys = []
+    boxes = []
     mapper = []
     for k in range(1,nLabels):
         # size filtering
@@ -47,6 +60,7 @@ def getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text)
         w, h = stats[k, cv2.CC_STAT_WIDTH], stats[k, cv2.CC_STAT_HEIGHT]
         niter = int(math.sqrt(size * min(w, h) / (w * h)) * 2)
         sx, ex, sy, ey = x - niter, x + w + niter + 1, y - niter, y + h + niter + 1
+
         # boundary check
         if sx < 0 : sx = 0
         if sy < 0 : sy = 0
@@ -73,20 +87,9 @@ def getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text)
         box = np.roll(box, 4-startidx, 0)
         box = np.array(box)
 
-        det.append(box)
+        boxes.append(box)
         mapper.append(k)
 
-    return det, labels, mapper
-
-def getPoly_core(boxes, labels, mapper, linkmap):
-    # configs
-    num_cp = 5
-    max_len_ratio = 0.7
-    expand_ratio = 1.45
-    max_r = 2.0
-    step_r = 0.2
-
-    polys = []  
     for k, box in enumerate(boxes):
         # size filter for small instance
         w, h = int(np.linalg.norm(box[0] - box[1]) + 1), int(np.linalg.norm(box[1] - box[2]) + 1)
@@ -160,7 +163,7 @@ def getPoly_core(boxes, labels, mapper, linkmap):
         if num_sec != 0:
             cp_section[-1] = [cp_section[-1][0] / num_sec, cp_section[-1][1] / num_sec]
 
-        # pass if num of pivots is not sufficient or segment widh is smaller than character height 
+        # pass if num of pivots is not sufficient or segment widh is smaller than character height
         if None in pp or seg_w < np.max(seg_height) * 0.25:
             polys.append(None); continue
 
@@ -210,29 +213,23 @@ def getPoly_core(boxes, labels, mapper, linkmap):
 
         # make final polygon
         poly = []
-        poly.append(warpCoord(Minv, (spp[0], spp[1])))
+        poly.append(warpCoordinates(Minv, (spp[0], spp[1])))
         for p in new_pp:
-            poly.append(warpCoord(Minv, (p[0], p[1])))
-        poly.append(warpCoord(Minv, (epp[0], epp[1])))
-        poly.append(warpCoord(Minv, (epp[2], epp[3])))
+            poly.append(warpCoordinates(Minv, (p[0], p[1])))
+        poly.append(warpCoordinates(Minv, (epp[0], epp[1])))
+        poly.append(warpCoordinates(Minv, (epp[2], epp[3])))
         for p in reversed(new_pp):
-            poly.append(warpCoord(Minv, (p[2], p[3])))
-        poly.append(warpCoord(Minv, (spp[2], spp[3])))
+            poly.append(warpCoordinates(Minv, (p[2], p[3])))
+        poly.append(warpCoordinates(Minv, (spp[2], spp[3])))
 
         # add to final result
         polys.append(np.array(poly))
 
-    return polys
-
-def getDetBoxes(textmap, linkmap, text_threshold, link_threshold, low_text, poly=False):
-    boxes, labels, mapper = getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text)
-
-    if poly:
-        polys = getPoly_core(boxes, labels, mapper, linkmap)
-    else:
-        polys = [None] * len(boxes)
-
     return boxes, polys
+
+def warpCoordinates(Minv, pt):
+    out = np.matmul(Minv, (pt[0], pt[1], 1))
+    return np.array([out[0]/out[2], out[1]/out[2]])
 
 def adjustResultCoordinates(polys, ratio_w, ratio_h, ratio_net = 2):
     if len(polys) > 0:

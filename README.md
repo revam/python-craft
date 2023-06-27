@@ -1,71 +1,146 @@
 ## CRAFT: Character-Region Awareness For Text detection
-Official Pytorch implementation of CRAFT text detector | [Paper](https://arxiv.org/abs/1904.01941) | [Pretrained Model](https://drive.google.com/open?id=1Jk4eGD7crsqCCg9C9VjCLkMN3ze8kutZ) | [Supplementary](https://youtu.be/HI8MzpY8KMI)
+Modified Pytorch implementation of CRAFT text detector | [Paper](https://arxiv.org/abs/1904.01941) | [Pretrained Model](https://drive.google.com/open?id=1Jk4eGD7crsqCCg9C9VjCLkMN3ze8kutZ) | [Supplementary](https://youtu.be/HI8MzpY8KMI)
 
 **[Youngmin Baek](mailto:youngmin.baek@navercorp.com), Bado Lee, Dongyoon Han, Sangdoo Yun, Hwalsuk Lee.**
- 
+
 Clova AI Research, NAVER Corp.
 
 ### Sample Results
 
 ### Overview
-PyTorch implementation for CRAFT text detector that effectively detect text area by exploring each character region and affinity between characters. The bounding box of texts are obtained by simply finding minimum bounding rectangles on binary map after thresholding character region and affinity scores. 
+PyTorch implementation for CRAFT text detector that effectively detect text area by exploring each character region and affinity between characters. The bounding box of texts are obtained by simply finding minimum bounding rectangles on binary map after thresholding character region and affinity scores.
 
 <img width="1000" alt="teaser" src="./figures/craft_example.gif">
 
 ## Updates
-**13 Jun, 2019**: Initial update
+**13 Jun, 2019**: Initial version
+
 **20 Jul, 2019**: Added post-processing for polygon result
+
 **28 Sep, 2019**: Added the trained model on IC15 and the link refiner
 
+**27 Jun, 2023**: Modified the code to my liking, so i could export it for ONNX.
 
 ## Getting started
+
 ### Install dependencies
-#### Requirements
-- PyTorch>=0.4.1
-- torchvision>=0.2.1
-- opencv-python>=3.4.2
-- check requiremtns.txt
-```
+Install the dependencies with PIP;
+
+```sh
 pip install -r requirements.txt
 ```
+
+#### Requirements
+- `onnx` = `1.14.0`
+- `opencv-python` = `3.4.18.65`
+- `scikit-imag` = `0.21.0`
+- `scipy` = `1.11.0`
+- `torch`= `2.0.1`
+- `torchvision` = `0.15.2`
+
+You can safely remove the dependency on `onnx` if you don't plan to export the
+model.
 
 ### Training
 The code for training is not included in this repository, and we cannot release the full training code for IP reason.
 
+### Instructions for exporting a pre-trained model to ONNX
 
-### Test instruction using pretrained model
-- Download the trained models
- 
- *Model name* | *Used datasets* | *Languages* | *Purpose* | *Model Link* |
- | :--- | :--- | :--- | :--- | :--- |
-General | SynthText, IC13, IC17 | Eng + MLT | For general purpose | [Click](https://drive.google.com/open?id=1Jk4eGD7crsqCCg9C9VjCLkMN3ze8kutZ)
-IC15 | SynthText, IC15 | Eng | For IC15 only | [Click](https://drive.google.com/open?id=1i2R7UIUqmkUtF0jv_3MXTqmQ_9wuAnLf)
-LinkRefiner | CTW1500 | - | Used with the General Model | [Click](https://drive.google.com/open?id=1XSaFwBkOaFOdtk4Ane3DFyJGPRw6v5bO)
+- Download the pre-trained models
 
-* Run with pretrained model
-``` (with python 3.7)
-python test.py --trained_model=[weightfile] --test_folder=[folder path to test images]
-```
+  *Model name* | *Used datasets* | *Languages* | *Purpose* | *Model Link* |
+  | :--- | :--- | :--- | :--- | :--- |
+  General | SynthText, IC13, IC17 | Eng + MLT | For general purpose | [Click](https://drive.google.com/open?id=1Jk4eGD7crsqCCg9C9VjCLkMN3ze8kutZ)
+  IC15 | SynthText, IC15 | Eng | For IC15 only | [Click](https://drive.google.com/open?id=1i2R7UIUqmkUtF0jv_3MXTqmQ_9wuAnLf)
+  LinkRefiner | CTW1500 | - | Used with the General Model | [Click](https://drive.google.com/open?id=1XSaFwBkOaFOdtk4Ane3DFyJGPRw6v5bO)
 
-The result image and socre maps will be saved to `./result` by default.
+- Run the export script
 
-### Arguments
-* `--trained_model`: pretrained model
-* `--text_threshold`: text confidence threshold
-* `--low_text`: text low-bound score
-* `--link_threshold`: link confidence threshold
-* `--cuda`: use cuda for inference (default:True)
-* `--canvas_size`: max image size for inference
-* `--mag_ratio`: image magnification ratio
-* `--poly`: enable polygon type result
-* `--show_time`: show processing time
-* `--test_folder`: folder path to input images
-* `--refine`: use link refiner for sentense-level dataset
-* `--refiner_model`: pretrained refiner model
+  ```sh
+  python3 export.py --base_model=[base_net_weights_file] --refine_model=[refine_net_weights_file] --export_name=[export_name]
+  ```
 
+#### **Arguments**
+
+**Model arguments**:
+- `--base_model` (Default: `"./weights/craft_mlt_25k.pth"`) — Pre-trained base net model.
+- `--refine_model` (Default: `"./weights/craft_refiner_CTW1500.pth"`) — Pre-trained refine net model.
+
+**Pre-processing arguments**:
+- `--canvas_size` (Default: `1280`) — Max image size (in pixels) for inference.
+
+**Export arguments**:
+- `--export_name` (Default: `"./refined_craft.onnx"`) — Name of the exported onnx format model.
+
+### Instructions for testing the exported ONNX model
+
+- Export the model following the above steps
+
+- Run the test script with exported model (tested with python 3.11)
+  ```sh
+  python test_onnx.py --model=[exported_model_file] --image_folder=[image_folder_path]
+  ```
+
+The result image and score maps will be saved to `./result` by default unless a
+different output folder is spesified using `--result_folder`.
+
+#### **Arguments**
+
+**Model arguments**:
+- `--model` (Default: `"./refined_craft.onnx"`) — Exported ONNX model.
+
+**Pre-processing arguments**:
+- `--canvas_size` (Default: `1280`) — Max image size (in pixels) for inference.
+- `--mag_ratio` (Default: `1.5`) — Image magnification ratio.
+
+**Post-processing arguments**:
+- `--text_threshold` (Default: `0.7`) — Text confidence threshold.
+- `--low_text` (Default: `0.4`) — Text low-bound score.
+- `--link_threshold` (Default: `0.4`) — Link confidence threshold.
+
+**Test arguments**:
+- `--image_folder` (Default: `"./data/"`) — Path to the images input folder.
+- `--result_folder` (Default: `"./result/"`) — Path to output folder.
+
+### Instruction for testing the pre-trained PyTorch models
+
+- Download the pre-trained models;
+
+  *Model name* | *Used datasets* | *Languages* | *Purpose* | *Model Link* |
+  | :--- | :--- | :--- | :--- | :--- |
+  General | SynthText, IC13, IC17 | Eng + MLT | For general purpose | [Click](https://drive.google.com/open?id=1Jk4eGD7crsqCCg9C9VjCLkMN3ze8kutZ)
+  IC15 | SynthText, IC15 | Eng | For IC15 only | [Click](https://drive.google.com/open?id=1i2R7UIUqmkUtF0jv_3MXTqmQ_9wuAnLf)
+  LinkRefiner | CTW1500 | - | Used with the General Model | [Click](https://drive.google.com/open?id=1XSaFwBkOaFOdtk4Ane3DFyJGPRw6v5bO)
+
+- Run the test script with pretrained model (tested with python 3.11)
+  ```sh
+  python test_pytorch.py --base_model=[base_net_weights_file] --refine_model=[refine_net_weights_file] --image_folder=[image_folder_path]
+  ```
+
+The result image and score maps will be saved to `./result` by default unless a
+different output folder is spesified using `--result_folder`.
+
+#### **Arguments**
+
+**Model arguments**:
+- `--base_model` (Default: `"./weights/craft_mlt_25k.pth"`) — Pre-trained base net model.
+- `--refine_model` (Default: `"./weights/craft_refiner_CTW1500.pth"`) — Pre-trained refine net model.
+
+**Pre-processing arguments**:
+- `--canvas_size` (Default: `1280`) — Max image size (in pixels) for inference.
+- `--mag_ratio` (Default: `1.5`) — Image magnification ratio.
+
+**Post-processing arguments**:
+- `--text_threshold` (Default: `0.7`) — Text confidence threshold.
+- `--low_text` (Default: `0.4`) — Text low-bound score.
+- `--link_threshold` (Default: `0.4`) — Link confidence threshold.
+
+**Test arguments**:
+- `--image_folder` (Default: `"./data/"`) — Path to the images input folder.
+- `--result_folder` (Default: `"./result/"`) — Path to output folder.
 
 ## Links
-- WebDemo : https://demo.ocr.clova.ai/
+- WebDemo : `https://demo.ocr.clova.ai/` (dead link)
 - Repo of recognition : https://github.com/clovaai/deep-text-recognition-benchmark
 
 ## Citation

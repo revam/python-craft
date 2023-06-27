@@ -1,4 +1,4 @@
-"""  
+"""
 Copyright (c) 2019-present NAVER Corp.
 MIT License
 """
@@ -54,7 +54,7 @@ class CRAFT(nn.Module):
         init_weights(self.upconv3.modules())
         init_weights(self.upconv4.modules())
         init_weights(self.conv_cls.modules())
-        
+
     def forward(self, x):
         """ Base network """
         sources = self.basenet(x)
@@ -80,6 +80,6 @@ class CRAFT(nn.Module):
         return y.permute(0,2,3,1), feature
 
 if __name__ == '__main__':
-    model = CRAFT(pretrained=True).cuda()
-    output, _ = model(torch.randn(1, 3, 768, 768).cuda())
+    model = CRAFT(pretrained=True)
+    output, _ = model(torch.randn(1, 3, 768, 768))
     print(output.shape)

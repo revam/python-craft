@@ -2,5 +2,7 @@
 *.swp
 *.pkl
 *.pth
-result*
-weights*
+*.onnx
+result/*
+weights/*
+data/*
